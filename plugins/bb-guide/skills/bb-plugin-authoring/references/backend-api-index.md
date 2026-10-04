@@ -8,6 +8,8 @@ Read the installed declarations for exact current signatures.
 
 - `PLUGIN_CLI_OUTPUT_MAX_BYTES`
 - `defineRpcContract`
+- `experimental_copyWorktreeIncludeFiles` — copy files listed in
+  `.worktreeinclude` into a worktree a provider created
 - `experimental_defineHostEntry`
 - `defineCli`
 - `cliCommand`

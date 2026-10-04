@@ -3683,3 +3683,19 @@ with third-party providers.
 `bb.sdk.experimental_promptHistory.list({ cursor?, limit?, signal? })` returns `{ entries, nextCursor }`: every accepted user prompt across projects and threads, newest first, each with `id`, `createdAt`, `input`, `projectId`, and `threadId`. `limit` is a digit string, defaulting to 100 and capped at 1000. `nextCursor` is an opaque string, or null on the last page. A page can hold fewer than `limit` entries while `nextCursor` is set, because stored rows whose input no longer parses are skipped. Prompts from a deleted thread remain listed until the thread row is removed, which cascades to its prompt history. The same route backs `bb prompt-history list`.
 
 Before stabilization, audit whether `limit` should be a number, whether the cursor format needs versioning, whether project or thread filters belong on this call rather than on `projects.promptHistory` and `threads.promptHistory`, and whether skipped rows should fill the page.
+
+## `experimental_copyWorktreeIncludeFiles`
+
+`experimental_copyWorktreeIncludeFiles({ sourcePath, targetPath, signal? })`
+from `@get-bb/plugin-sdk/host` copies the untracked files that match the source
+checkout's `.worktreeinclude` patterns into a new worktree. It is the same
+function the Worktree plugin uses. It lets a provider that creates worktrees
+itself give users the same `.worktreeinclude` behavior. It returns
+`{ ran, copied, skipped }`. `ran` is false when the file is missing or holds no
+patterns. It never replaces a path the target already has, skips symlinks, and
+never writes outside `targetPath`. A per-file failure goes into `skipped`. A
+failed `git ls-files` rejects. An aborted signal rejects with `signal.reason`.
+
+Before stabilizing, confirm that a second provider uses it, decide whether
+providers also need the file name or a transcript helper, and confirm that the
+skip messages are stable enough to show to users.

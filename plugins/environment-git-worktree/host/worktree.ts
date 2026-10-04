@@ -1,4 +1,7 @@
-import { experimental_killProcessesWithCwdUnder } from "@get-bb/plugin-sdk/host";
+import {
+  experimental_copyWorktreeIncludeFiles as copyWorktreeIncludeFiles,
+  experimental_killProcessesWithCwdUnder,
+} from "@get-bb/plugin-sdk/host";
 import {
   findWorktreeEntry,
   parseWorktreeListPorcelain,
@@ -36,11 +39,6 @@ import {
   throwIfProvisionAborted,
   type ProgressCallback,
 } from "bb-environment-provider-host/transcript";
-import {
-  copyWorktreeIncludeFiles,
-  WORKTREE_INCLUDE_FILE_NAME,
-  type CopyWorktreeIncludeFilesResult,
-} from "./worktree-include.js";
 
 export type BranchMode = "reset" | "reuse-existing";
 
@@ -65,6 +63,7 @@ interface RemoveWorktreeArgs {
 const REMOTE_BASE_FETCH_TIMEOUT_MS = 60_000;
 const REMOTE_REF_LOCK_RETRY_INTERVAL_MS = 200;
 const REMOTE_REF_LOCK_RETRY_TIMEOUT_MS = 2_000;
+const WORKTREE_INCLUDE_FILE_NAME = ".worktreeinclude";
 const WORKTREE_INCLUDE_TRANSCRIPT_PATH_LIMIT = 20;
 
 type ConcurrentRemoteRefUpdateErrorKind = "stale-value" | "lock-file-exists";
@@ -386,7 +385,7 @@ async function copyIncludedFiles(args: {
 }): Promise<void> {
   throwIfProvisionAborted(args.signal);
   const startedAt = Date.now();
-  let result: CopyWorktreeIncludeFilesResult;
+  let result: Awaited<ReturnType<typeof copyWorktreeIncludeFiles>>;
   try {
     result = await copyWorktreeIncludeFiles({
       sourcePath: args.sourcePath,
@@ -394,9 +393,7 @@ async function copyIncludedFiles(args: {
       signal: args.signal,
     });
   } catch (error) {
-    if (isProvisionAbortError(error)) {
-      throw error;
-    }
+    throwIfProvisionAborted(args.signal);
     emitOutput(
       args.onProgress,
       "worktree-include",
