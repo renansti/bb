@@ -53,3 +53,14 @@ export {
   spawnPortableOutputProcess as experimental_spawnPortableOutputProcess,
 } from "@bb/process-utils";
 export type { SanitizeInheritedChildProcessEnvArgs as ExperimentalSanitizeInheritedChildProcessEnvArgs } from "@bb/process-utils";
+
+/**
+ * Copies the untracked files that match the source checkout's
+ * `.worktreeinclude` patterns into a new worktree, for a provider that creates
+ * worktrees itself. Uses gitignore syntax and runs `git` in `sourcePath`.
+ * Never replaces a path the target already has, skips symlinks, and never
+ * writes outside `targetPath`. Per-file failures are returned in `skipped`.
+ * Rejects with `signal.reason` when the signal aborts.
+ * Experimental: see docs/api_to_audit.md.
+ */
+export { copyWorktreeIncludeFiles as experimental_copyWorktreeIncludeFiles } from "./worktree-include.js";

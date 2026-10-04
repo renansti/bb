@@ -1,10 +1,13 @@
-import { runGit } from "bb-environment-provider-host/git";
+import {
+  sanitizeInheritedChildProcessEnv,
+  spawnPortableOutputProcess,
+} from "@bb/process-utils";
 import { constants as fsConstants } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { throwIfProvisionAborted } from "bb-environment-provider-host/transcript";
 
-export const WORKTREE_INCLUDE_FILE_NAME = ".worktreeinclude";
+const WORKTREE_INCLUDE_FILE_NAME = ".worktreeinclude";
+const MAX_LIST_OUTPUT_BYTES = 16 * 1024 * 1024;
 
 interface CopyWorktreeIncludeFilesArgs {
   sourcePath: string;
@@ -12,7 +15,7 @@ interface CopyWorktreeIncludeFilesArgs {
   signal?: AbortSignal | undefined;
 }
 
-export interface CopyWorktreeIncludeFilesResult {
+interface CopyWorktreeIncludeFilesResult {
   ran: boolean;
   copied: string[];
   skipped: string[];
@@ -53,24 +56,70 @@ async function readIncludeFile(sourcePath: string): Promise<string | null> {
   }
 }
 
-async function listMatchingFiles(
+function listMatchingFiles(
   sourcePath: string,
   signal: AbortSignal | undefined,
 ): Promise<string[]> {
-  const result = await runGit(
-    [
-      "ls-files",
-      "--others",
-      "--ignored",
-      `--exclude-from=${WORKTREE_INCLUDE_FILE_NAME}`,
-      "-z",
-    ],
-    {
+  signal?.throwIfAborted();
+  return new Promise((resolve, reject) => {
+    const child = spawnPortableOutputProcess({
+      command: "git",
+      args: [
+        "ls-files",
+        "--others",
+        "--ignored",
+        `--exclude-from=${WORKTREE_INCLUDE_FILE_NAME}`,
+        "-z",
+      ],
       cwd: sourcePath,
-      ...(signal !== undefined ? { signal } : {}),
-    },
-  );
-  return result.stdout.split("\0").filter(Boolean);
+      env: sanitizeInheritedChildProcessEnv({ env: process.env }),
+    });
+    const stdout: Buffer[] = [];
+    const stderr: Buffer[] = [];
+    let stdoutBytes = 0;
+    const onAbort = (): void => {
+      child.kill("SIGTERM");
+    };
+    signal?.addEventListener("abort", onAbort, { once: true });
+    child.stdout.on("data", (chunk: Buffer) => {
+      stdoutBytes += chunk.length;
+      if (stdoutBytes > MAX_LIST_OUTPUT_BYTES) {
+        child.kill("SIGKILL");
+        return;
+      }
+      stdout.push(chunk);
+    });
+    child.stderr.on("data", (chunk: Buffer) => {
+      stderr.push(chunk);
+    });
+    child.on("error", (error) => {
+      signal?.removeEventListener("abort", onAbort);
+      reject(signal?.aborted ? signal.reason : error);
+    });
+    child.on("close", (code) => {
+      signal?.removeEventListener("abort", onAbort);
+      if (signal?.aborted) {
+        reject(signal.reason);
+        return;
+      }
+      if (stdoutBytes > MAX_LIST_OUTPUT_BYTES) {
+        reject(
+          new Error(
+            `git ls-files produced more than ${MAX_LIST_OUTPUT_BYTES} bytes of output`,
+          ),
+        );
+        return;
+      }
+      if (code !== 0) {
+        const detail = Buffer.concat(stderr).toString("utf8").trim();
+        reject(new Error(`git ls-files failed${detail ? `: ${detail}` : ""}`));
+        return;
+      }
+      resolve(
+        Buffer.concat(stdout).toString("utf8").split("\0").filter(Boolean),
+      );
+    });
+  });
 }
 
 async function pathPresent(targetPath: string): Promise<boolean> {
@@ -124,7 +173,7 @@ export async function copyWorktreeIncludeFiles(
   const copied: string[] = [];
   const skipped: string[] = [];
   for (const relativePath of relativePaths) {
-    throwIfProvisionAborted(args.signal);
+    args.signal?.throwIfAborted();
     const sourceFile = path.join(args.sourcePath, relativePath);
     const targetFile = path.join(targetRealPath, relativePath);
     try {

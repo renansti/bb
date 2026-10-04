@@ -4,6 +4,7 @@ import {
   mkdir,
   mkdtemp,
   readdir,
+  readFile,
   realpath,
   rm,
   symlink,
@@ -395,6 +396,33 @@ describe("worktree host entry", () => {
     expect(resumed).toEqual(first);
     expect(existsSync(join(first.path, "survives.txt"))).toBe(true);
     await restartedHarness.experimental_dispose();
+  });
+
+  it("copies .worktreeinclude files into a new worktree", async () => {
+    const { sourcePath, dataDir } = await createSourceRepository();
+    await writeFile(join(sourcePath, ".gitignore"), ".env\n");
+    await writeFile(join(sourcePath, ".worktreeinclude"), ".env\n");
+    await git(sourcePath, "add", ".");
+    await git(sourcePath, "commit", "-m", "add worktreeinclude");
+    await writeFile(join(sourcePath, ".env"), "TOKEN=1\n");
+    const harness = createHarness(dataDir);
+
+    const result = await harness.experimental_call(
+      "create",
+      createInput({
+        operationId: "include",
+        sourcePath,
+        pathKey: "thr_include",
+        branchName: "bb/include",
+      }),
+    );
+
+    if (result.status !== "created") throw new Error(result.message);
+    expect(await readFile(join(result.path, ".env"), "utf8")).toBe("TOKEN=1\n");
+    expect(progressText(harness)).toContain(
+      "Copied 1 file(s) from .worktreeinclude",
+    );
+    await harness.experimental_dispose();
   });
 
   it("completes a recovered worktree without running core setup", async () => {

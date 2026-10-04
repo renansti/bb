@@ -1130,9 +1130,11 @@ export const SURFACE_GROUPS: SurfaceGroup[] = [
           "Declare desired loopback ports once and let bb deliver retained declarations when an enrolled machine reconnects",
           "Kill whatever is still running under a directory it is about to delete, SIGTERM then SIGKILL, so a torn-down workspace leaves nothing behind",
           "Spawn host-local commands with a sanitized inherited environment",
+          "Copy the files listed in .worktreeinclude into a worktree it created",
         ],
         apiSymbols: [
           "PluginHosts",
+          "experimental_copyWorktreeIncludeFiles",
           "experimental_killProcessesWithCwdUnder",
           "experimental_sanitizeInheritedChildProcessEnv",
           "ExperimentalSanitizeInheritedChildProcessEnvArgs",
